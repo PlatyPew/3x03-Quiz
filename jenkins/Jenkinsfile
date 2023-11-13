@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+
+    environment {
+        WTF_CSRF_SECRET_KEY = credentials('WTF_CSRF_SECRET_KEY')
+        SCANNER_HOME = tool 'SonarQube'
+    }
+
+    stages {
+        stage('Build App') {
+            steps {
+                script {
+                    sh 'docker compose build webapp'
+                }
+            }
+        }
+
+        stage('Test App') {
+            steps {
+                script {
+                    sh 'docker compose up -d webapp'
+                    sh 'docker compose up --exit-code-from webtest webtest'
+                    sh 'docker compose down webapp'
+                }
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                dependencyCheck additionalArguments: ''' 
+                            --enableExperimental
+                            -o './'
+                            -s './app/src'
+                            -f 'XML' 
+                            ''', odcInstallation: 'default'
+
+                // Write report to specified file
+                dependencyCheckPublisher pattern: 'dependency-check-report.xml'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh "${SCANNER_HOME}/bin/sonar-scanner -Dsonar.projectKey=SSDQuiz -Dsonar.sources=."
+                }
+            }
+        }
+
+        stage('Deploy App') {
+            steps {
+                script {
+                    sh 'docker compose up -d webapp'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Success!'
+        }
+
+        always {
+            // Remove all intermediate images and containers
+            sh 'docker system prune -f'
+        }
+    }
+}
+// vim: ft=groovy

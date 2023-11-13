@@ -1,0 +1,98 @@
+version: "3.9"
+
+services:
+    webapp:
+        build: ./app
+        image: webapp
+        container_name: webapp
+        networks:
+            - app-test
+        ports:
+            - "5000:5000"
+        environment:
+            - WTF_CSRF_SECRET_KEY=${WTF_CSRF_SECRET_KEY}
+        deploy:
+            restart_policy:
+                condition: always
+                delay: 3s
+
+    webtest:
+        build: ./app/tests
+        image: webtest
+        container_name: webtest
+        networks:
+            - app-test
+        depends_on:
+            - webapp
+        deploy:
+            restart_policy:
+                condition: always
+                delay: 3s
+
+    cicd:
+        build: ./jenkins
+        image: cicd
+        container_name: cicd
+        ports:
+            - "8080:8080"
+        environment:
+            - DOCKER_HOST=tcp://docker:2376
+            - DOCKER_CERT_PATH=/certs/client
+            - DOCKER_TLS_VERIFY=1
+        volumes:
+            - jenkins-docker-certs:/certs/client:ro
+            - jenkins-data:/var/jenkins_home
+        networks:
+            - cicd
+        depends_on:
+            - docker
+            - sast
+        deploy:
+            restart_policy:
+                condition: always
+                delay: 3s
+
+    sast:
+        image: sonarqube:latest
+        container_name: sast
+        ports:
+            - "9000:9000"
+        volumes:
+            - sonarqube-data:/opt/sonarqube:rw
+        networks:
+            - cicd
+        deploy:
+            restart_policy:
+                condition: always
+                delay: 3s
+
+    docker:
+        image: docker:dind
+        container_name: dind
+        privileged: true
+        ports:
+            - "80:5000"
+        environment:
+            - DOCKER_TLS_CERTDIR=/certs
+        volumes:
+            - jenkins-docker-certs:/certs/client
+            - jenkins-data:/var/jenkins_home
+            - docker-data:/var/lib/docker
+        networks:
+            - cicd
+        deploy:
+            restart_policy:
+                condition: always
+                delay: 3s
+
+volumes:
+    jenkins-docker-certs:
+    jenkins-data:
+    docker-data:
+    sonarqube-data:
+
+networks:
+    app-test:
+        name: app-test-local
+    cicd:
+        name: cicd-local
