@@ -3,13 +3,13 @@ from flask import Flask, render_template, request
 from flask_wtf.csrf import CSRFProtect
 
 import re
-import os
+import secrets
 
 INDEX_PAGE = "index.html"
 SANITISED_PATTERN = re.compile(r"^[a-zA-Z0-9 ]+$")
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('WTF_CSRF_SECRET_KEY')
+app.config['SECRET_KEY'] = secrets.token_bytes(64)
 
 csrf = CSRFProtect(app)
 
